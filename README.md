@@ -4,6 +4,8 @@ This project implements **SFAR**, a graph representation learning framework that
 
 ---
 
+### ⚠️ Due to the double-blind review policy, the complete dataset and trainable parameters will be released once the paper is published.  
+
 ### 🔧 Requirements
 
 * Python 3.7+
