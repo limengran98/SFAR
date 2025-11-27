@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+
+# Data & Models (防止大文件导致上传失败)
+*.pt
+*.pth
+*.pkl
+embeddings/
+LLMs/
+data/
+
+# OS
+.DS_Store
+.idea/
+.vscode/
