@@ -7,6 +7,7 @@ import GCL.losses as L
 from .layers import UnitNorm, GConv
 from .encoders import Encoder
 
+
 class SFAR(nn.Module):
     def __init__(self, device, llm_feature_dim, hidden_size=256, num_layers=2, conv='gcn', obs_features=None):
         super().__init__()

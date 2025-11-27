@@ -29,6 +29,7 @@ from utils import *
 
 
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default='cora')

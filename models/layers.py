@@ -70,7 +70,6 @@ class GConv(nn.Module):
                 z = conv(z, edge_index, edge_weight)
         return z, self.projection_head(z)
 
-# --- 下面是原 utils.py 中的分类器模型 ---
 
 class GCN(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels):

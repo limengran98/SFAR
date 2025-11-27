@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from sklearn.metrics import ndcg_score
 
+
 @torch.no_grad()
 def to_f1_score(input, target, epsilon=1e-8):
     assert (target < 0).int().sum() == 0

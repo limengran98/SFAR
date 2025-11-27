@@ -37,3 +37,4 @@ class Encoder(nn.Module):
 
         xmlp = self.mlp(x)
         return h1, h2, h1_pred, h2_pred, h1_target, h2_target, x, xmlp
+    

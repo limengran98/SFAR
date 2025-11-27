@@ -4,6 +4,7 @@ from torch_scatter import scatter_add
 from torch_geometric.typing import Adj
 from torch_geometric.utils import get_laplacian, remove_self_loops
 
+
 def get_normalized_adjacency(edge_index, n_nodes, mode=None):
     edge_weight = torch.ones((edge_index.size(1),), device=edge_index.device)
     row, col = edge_index[0], edge_index[1]
