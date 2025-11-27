@@ -1,57 +1,83 @@
-#!/bin/bash
+## 🧠 SFAR: Semantic Fusion Attribute Recovery for Text Attribute Missing Graphs via Large Language Model Knowledge Generalization
 
-# 定义 SSH 仓库地址
-REPO_SSH="git@github.com:limengran98/SFAR.git"
-BRANCH_NAME="main"
+This project implements **SFAR**, a graph representation learning framework that incorporates LLM-derived features, graph propagation, and self-supervised contrastive learning. It also includes downstream node classification using both MLP and GCN classifiers.
 
-echo "========================================"
-echo "开始切换到 SSH 并强制同步本地代码"
-echo "========================================"
+---
 
-# 1. 清理之前的错误状态
-# 如果处于合并冲突状态，先中止合并
-if [ -f .git/MERGE_HEAD ]; then
-    echo "[操作] 检测到正在进行的合并冲突，正在中止..."
-    git merge --abort
-    echo "[成功] 已中止失败的合并。"
-fi
+### 🔧 Requirements
 
-# 2. 切换远程仓库地址为 SSH
-echo "[操作] 设置远程仓库为 SSH 模式: $REPO_SSH"
-# 无论是否存在 origin，先尝试删除再添加，或直接设置 URL
-if git remote | grep -q "^origin$"; then
-    git remote set-url origin "$REPO_SSH"
-else
-    git remote add origin "$REPO_SSH"
-fi
+* Python 3.7+
+* PyTorch ≥ 1.10
+* PyTorch Geometric
+* scikit-learn
+* NumPy
 
-# 3. 提交本地更改
-echo "[操作] 添加本地文件..."
-git add .
+Install dependencies:
 
-# 检查是否有未提交的更改
-if [ -n "$(git status --porcelain)" ]; then
-    echo "[操作] 提交本地更改..."
-    git commit -m "Refactor: Modularize project structure (Force Sync)"
-else
-    echo "[提示] 本地没有新的更改需要提交。"
-fi
+```bash
+pip install -r requirements.txt
+```
 
-# 4. 强制推送 (解决 non-fast-forward 问题)
-echo "========================================"
-echo "正在强制推送到 GitHub (SSH)..."
-echo "这将使用本地版本覆盖远程版本。"
-echo "========================================"
+---
 
-if git push -u origin $BRANCH_NAME --force; then
-    echo "========================================"
-    echo "[成功] 代码已通过 SSH 强制上传成功！"
-    echo "========================================"
-else
-    echo "========================================"
-    echo "[失败] 推送失败。请检查以下两点："
-    echo "1. 你的 GitHub 账户是否已配置 SSH Key (id_rsa.pub)。"
-    echo "2. 运行 'ssh -T git@github.com' 测试连接是否通畅。"
-    echo "========================================"
-    exit 1
-fi
+### 🚀 How to Run
+
+Train the model and evaluate reconstruction & classification:
+
+```bash
+python mp.py --data cora
+```
+
+Optional arguments:
+
+| Argument     | Description                             | Default  |
+| ------------ | --------------------------------------- | -------- |
+| `--data`     | Dataset name (`cora`, `citeseer`, etc.) | `'cora'` |
+| `--missrate` | Feature missing ratio                   | `0.6`    |
+| `--num_iter` | Propagation steps in AFP module         | `20`     |
+| `--epochs`   | Number of training epochs               | `50`     |
+| `--gpu`      | GPU ID to use (`0` for CUDA:0)          | `0`      |
+
+---
+
+### 📊 Evaluation Metrics
+
+* **Feature Reconstruction**:
+
+  * Recall\@10 / @20 / @50
+  * nDCG\@10 / @20 / @50
+
+* **Downstream Node Classification**:
+
+  * MLP & GCN-based classifiers
+  * Metrics: Accuracy, Macro-F1, Precision, Recall
+  * 5-fold cross-validation
+
+---
+
+### 📦 Output Files
+
+All outputs are saved in:
+
+```
+{DATASET}/embeddings/
+├── z.pt          # Final node embeddings
+├── z1.pt         # LLM feature projection
+├── z2.pt         # Graph feature projection
+├── x_feature.pt  # Graph propagated features
+├── llmfeatures.pt
+├── train_nodes.pt / test_nodes.pt
+```
+
+---
+
+### 📌 Notes
+
+* Pretrained LLM-based node features must be pre-generated and placed in the expected folder structure.
+* This project is research-oriented and designed for academic use.
+
+---
+
+### 🧑‍💻 Citation
+
+If you use or adapt this project, please cite appropriately based on your related work. This repo is built for reproducibility and educational purposes.# SFAR
