@@ -8,6 +8,7 @@ import time
 import torch
 from torch import optim
 import numpy as np
+<<<<<<< HEAD
 import argparse
 import os
 import time
@@ -20,6 +21,13 @@ from models.layers import Linear, GCN
 from utils.propagation import APA
 from utils.helpers import to_device, to_recall, to_ndcg
 from utils.metrics import to_f1_score, to_recall, to_ndcg # Explicitly check where recall/ndcg are used
+=======
+from data import load_data
+from model import SFAR
+from utils import *
+
+import numpy as np
+>>>>>>> 70543e0977ea2ace31c5dd0564316b68dd06d64f
 import argparse
 import torch.nn.functional as F
 from torch_geometric.utils import subgraph
