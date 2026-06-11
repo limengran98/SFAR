@@ -36,13 +36,6 @@ Feature reconstruction only:
 python main.py --dataset cora --skip-classification --gpu 0
 ```
 
-Useful options:
-
-```bash
-python main.py --dataset citeseer --missing-rate 0.6 --gpu 1
-python main.py --dataset cora --device cpu --ckd-epochs 1 --classifier-epochs 1
-```
-
 ## Data And HERP Features
 
 PyG datasets are loaded as:
@@ -57,7 +50,10 @@ HERP semantic features are offline inputs. Put `.emb` files under:
 ```text
 LLMs/Origin/bert-large-uncased.emb
 LLMs/ChatGPT3.5/bert-large-uncased.emb
+LLMs/LLaMA3/bert-large-uncased.emb
 ```
+
+link: [LLMs](https://drive.google.com/file/d/1RUD5K466uJFWqDuRxTVPYCRZHxcv6p_m/view?usp=sharing)
 
 Raw LLM responses and full text corpora are not included. The preprocessing follows the TAPE-style pipeline:
 
