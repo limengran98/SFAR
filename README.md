@@ -1,82 +1,90 @@
-## 🧠 SFAR: Semantic Fusion Attribute Recovery for Text Attribute Missing Graphs via Large Language Model Knowledge Generalization
+# SFAR
 
-This project implements **SFAR**, a graph representation learning framework that incorporates LLM-derived features, graph propagation, and self-supervised contrastive learning. It also includes downstream node classification using both MLP and GCN classifiers.
+This repository contains a compact implementation of **SFAR** for missing node feature reconstruction and downstream node classification on Cora, Citeseer, Amac, and Amap.
 
----
+## Structure
 
-### 🔧 Requirements
+```text
+main.py                 # experiment entry point
+configs/default.json    # default parameters
+sfar/                   # core implementation
+tools/                  # optional tuning/export utilities
+```
 
-* Python 3.7+
-* PyTorch ≥ 1.10
-* PyTorch Geometric
-* scikit-learn
-* NumPy
+Generated files are saved under `outputs/<dataset>/<run_name>/`. Datasets, LLM embeddings, tensors, and results are ignored by git.
 
-Install dependencies:
+## Run
+
+Feature reconstruction and node classification:
 
 ```bash
-pip install -r requirements.txt
+python main.py --dataset cora --gpu 0
+python main.py --dataset citeseer --gpu 0
+python main.py --dataset amac --gpu 0
+python main.py --dataset amap --gpu 0
 ```
----
 
-### 🚀 How to Run
-
-Train the model and evaluate reconstruction & classification:
+Run all four datasets:
 
 ```bash
-python mp.py --data cora
+python main.py --gpu 0 --run-name sfar_main
 ```
 
-Optional arguments:
+Feature reconstruction only:
 
-| Argument     | Description                             | Default  |
-| ------------ | --------------------------------------- | -------- |
-| `--data`     | Dataset name (`cora`, `citeseer`, etc.) | `'cora'` |
-| `--missrate` | Feature missing ratio                   | `0.6`    |
-| `--num_iter` | Propagation steps in AFP module         | `20`     |
-| `--epochs`   | Number of training epochs               | `50`     |
-| `--gpu`      | GPU ID to use (`0` for CUDA:0)          | `0`      |
-
----
-
-### 📊 Evaluation Metrics
-
-* **Feature Reconstruction**:
-
-  * Recall\@10 / @20 / @50
-  * nDCG\@10 / @20 / @50
-
-* **Downstream Node Classification**:
-
-  * MLP & GCN-based classifiers
-  * Metrics: Accuracy, Macro-F1, Precision, Recall
-  * 5-fold cross-validation
-
----
-
-### 📦 Output Files
-
-All outputs are saved in:
-
-```
-{DATASET}/embeddings/
-├── z.pt          # Final node embeddings
-├── z1.pt         # LLM feature projection
-├── z2.pt         # Graph feature projection
-├── x_feature.pt  # Graph propagated features
-├── llmfeatures.pt
-├── train_nodes.pt / test_nodes.pt
+```bash
+python main.py --dataset cora --skip-classification --gpu 0
 ```
 
----
+Useful options:
 
-### 📌 Notes
+```bash
+python main.py --dataset citeseer --missing-rate 0.6 --gpu 1
+python main.py --dataset cora --device cpu --ckd-epochs 1 --classifier-epochs 1
+```
 
-* Pretrained LLM-based node features must be pre-generated and placed in the expected folder structure.
-* This project is research-oriented and designed for academic use.
+## Data And HERP Features
 
----
+PyG datasets are loaded as:
 
-### 🧑‍💻 Citation
+- `cora` -> `Planetoid("Cora")`
+- `citeseer` -> `Planetoid("Citeseer")`
+- `amac` -> `Amazon("Computers")`
+- `amap` -> `Amazon("Photo")`
 
-If you use or adapt this project, please cite appropriately based on your related work. This repo is built for reproducibility and educational purposes.# SFAR
+HERP semantic features are offline inputs. Put `.emb` files under:
+
+```text
+LLMs/Origin/bert-large-uncased.emb
+LLMs/ChatGPT3.5/bert-large-uncased.emb
+```
+
+Raw LLM responses and full text corpora are not included. The preprocessing follows the TAPE-style pipeline:
+
+https://github.com/XiaoxinHe/TAPE/
+
+To convert TAPE-style `.emb` files into cached tensors:
+
+```bash
+python tools/export_herp_embeddings.py \
+  --origin-emb LLMs/Origin/bert-large-uncased.emb \
+  --expert-emb LLMs/ChatGPT3.5/bert-large-uncased.emb \
+  --num-nodes 2708 \
+  --feature-dim 1433 \
+  --output outputs/corallmfeatures.pt
+```
+
+## Utilities
+
+AFP tuning:
+
+```bash
+python tools/tune_afp.py --dataset citeseer
+```
+
+CKD/classifier tuning:
+
+```bash
+python tools/tune_classification.py --datasets cora,citeseer --gpu 0
+python tools/tune_classifier_head.py --dataset citeseer --gpu 0
+```

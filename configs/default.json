@@ -1,0 +1,68 @@
+{
+  "data_root": "data",
+  "cache_dir": null,
+  "output_dir": "outputs",
+  "save_tensors": true,
+  "datasets": ["cora", "citeseer", "amac", "amap"],
+  "seed": 11,
+  "missing_rate": 0.6,
+  "use_cached_features": false,
+  "use_cached_embeddings": false,
+  "herp": {
+    "llm_model": "ChatGPT3.5",
+    "lm_model": "bert-large-uncased",
+    "semantic_scale": 1.0,
+    "llm_emb_dir": "LLMs"
+  },
+  "afp": {
+    "default": {
+      "alpha": 0.99,
+      "beta": 0.9,
+      "iterations": 2
+    },
+    "datasets": {
+      "cora": {
+        "alpha": 0.995,
+        "beta": 0.9,
+        "iterations": 13
+      },
+      "citeseer": {
+        "alpha": 0.95,
+        "beta": 0.9,
+        "iterations": 8
+      },
+      "amac": {
+        "alpha": 0.9995,
+        "beta": 0.9,
+        "iterations": 2
+      },
+      "amap": {
+        "alpha": 0.9995,
+        "beta": 0.85,
+        "iterations": 3
+      }
+    }
+  },
+  "ckd": {
+    "epochs": 50,
+    "lr": 0.001,
+    "hidden_size": 256,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "conv": "gcn",
+    "fusion": "latents_afp"
+  },
+  "classifier": {
+    "epochs": 1000,
+    "lr": 0.01,
+    "hidden_size": 256,
+    "dropout": 0.2,
+    "folds": 5,
+    "datasets": {
+      "citeseer": {
+        "lr": 0.005,
+        "dropout": 0.3
+      }
+    }
+  }
+}

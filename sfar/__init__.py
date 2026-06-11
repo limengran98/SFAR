@@ -1,0 +1,1 @@
+"""SFAR core package."""
