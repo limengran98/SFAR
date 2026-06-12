@@ -36,7 +36,6 @@ Run all four datasets with the full-graph GCN classifier protocol:
 python main.py --gpu 0 --gcn-graph-scope full --run-name full_graph_gcn --no-save-tensors
 ```
 
-The split protocol remains 40/10/50. The full-graph option only changes GCN message passing; feature reconstruction and MLP classification are unchanged.
 
 Feature reconstruction only:
 
