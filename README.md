@@ -36,7 +36,6 @@ Run all four datasets with the full-graph GCN classifier protocol:
 python main.py --gpu 0 --gcn-graph-scope full --run-name full_graph_gcn --no-save-tensors
 ```
 
-
 Feature reconstruction only:
 
 ```bash
