@@ -33,7 +33,7 @@ python main.py --gpu 0 --run-name sfar_main
 Run all four datasets with the full-graph GCN classifier protocol:
 
 ```bash
-./run_sfar.sh 0 full_graph_gcn --no-save-tensors
+python main.py --gpu 0 --gcn-graph-scope full --run-name full_graph_gcn --no-save-tensors
 ```
 
 The split protocol remains 40/10/50. The full-graph option only changes GCN message passing; feature reconstruction and MLP classification are unchanged.
@@ -91,4 +91,10 @@ CKD/classifier tuning:
 ```bash
 python tools/tune_classification.py --datasets cora,citeseer --gpu 0
 python tools/tune_classifier_head.py --dataset citeseer --gpu 0
+```
+
+Push code-only changes:
+
+```bash
+./push_code_only.sh "update code"
 ```
