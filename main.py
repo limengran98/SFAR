@@ -20,6 +20,7 @@ def parse_args():
     parser.add_argument("--gpu", type=int, default=None, help="CUDA device index, e.g., --gpu 1. Overrides --device.")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--missing-rate", type=float, default=None, help="Fraction of target nodes with missing features. Default: 0.6.")
+    parser.add_argument("--validation-rate", type=float, default=None, help="Fraction of all nodes used as validation missing nodes. Default: 0.1.")
     parser.add_argument("--cache-dir", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--run-name", default=None)
@@ -30,6 +31,12 @@ def parse_args():
     parser.add_argument("--skip-classification", action="store_true")
     parser.add_argument("--ckd-epochs", type=int, default=None)
     parser.add_argument("--classifier-epochs", type=int, default=None)
+    parser.add_argument(
+        "--gcn-graph-scope",
+        choices=["eval", "target", "full"],
+        default=None,
+        help="Graph used by the GCN classifier: eval/test nodes, all target nodes, or the full graph.",
+    )
     return parser.parse_args()
 
 
@@ -38,9 +45,13 @@ def main():
     cfg = load_config(args.config)
     seed = cfg["seed"] if args.seed is None else args.seed
     missing_rate = cfg.get("missing_rate", 0.6) if args.missing_rate is None else args.missing_rate
+    validation_rate = cfg.get("validation_rate", missing_rate / 6.0) if args.validation_rate is None else args.validation_rate
     if not 0.0 < missing_rate < 1.0:
         raise ValueError("--missing-rate must be between 0 and 1.")
+    if not 0.0 < validation_rate < missing_rate:
+        raise ValueError("--validation-rate must be greater than 0 and smaller than --missing-rate.")
     cfg["missing_rate"] = missing_rate
+    cfg["validation_rate"] = validation_rate
     set_seed(seed)
 
     device = select_device(args.device, args.gpu)
@@ -54,7 +65,7 @@ def main():
     results = {}
     for dataset in datasets:
         print(f"\n========== {paper_name(dataset)} ==========")
-        result = run_dataset(dataset, cfg, cache_dir, seed, missing_rate, device, args, writer, save_tensors)
+        result = run_dataset(dataset, cfg, cache_dir, seed, missing_rate, validation_rate, device, args, writer, save_tensors)
         results[paper_name(dataset)] = result
         writer.save_dataset_result(dataset, result)
 
@@ -68,6 +79,7 @@ def run_dataset(
     cache_dir: str | None,
     seed: int,
     missing_rate: float,
+    validation_rate: float,
     device: torch.device,
     args,
     writer: ResultWriter,
@@ -75,20 +87,29 @@ def run_dataset(
 ):
     graph = load_graph(dataset, cfg["data_root"])
     data = graph.data
-    train_nodes, target_nodes = split_nodes(data.y, dataset, cache_dir, missing_rate, seed)
+    split = split_nodes(data.y, dataset, cache_dir, missing_rate, seed, validation_rate)
+    train_nodes = split.train_nodes
+    val_nodes = split.val_nodes
+    test_nodes = split.test_nodes
+    target_nodes = split.target_nodes
     tensor_paths = {}
     if save_tensors:
         tensor_paths["train_nodes"] = writer.save_tensor(dataset, "train_nodes.pt", train_nodes)
+        tensor_paths["val_nodes"] = writer.save_tensor(dataset, "val_nodes.pt", val_nodes)
+        tensor_paths["test_nodes"] = writer.save_tensor(dataset, "test_nodes.pt", test_nodes)
         tensor_paths["target_nodes"] = writer.save_tensor(dataset, "target_nodes.pt", target_nodes)
 
     raw_features = data.x.float()
     edge_index = data.edge_index
-    print(f"Observed nodes: {train_nodes.numel()}, target nodes: {target_nodes.numel()}, missing rate: {target_nodes.numel() / data.num_nodes:.2%}")
+    print(
+        f"Observed nodes: {train_nodes.numel()}, validation nodes: {val_nodes.numel()}, "
+        f"test nodes: {test_nodes.numel()}, missing rate: {target_nodes.numel() / data.num_nodes:.2%}"
+    )
     afp_features = reconstruct_features(dataset, cfg, raw_features, edge_index, train_nodes, target_nodes, device)
     if save_tensors:
         tensor_paths["x_feature"] = writer.save_tensor(dataset, "x_feature.pt", afp_features)
 
-    rec = reconstruction_scores(afp_features[target_nodes].to(device), raw_features[target_nodes].to(device))
+    rec = reconstruction_scores(afp_features[test_nodes].to(device), raw_features[test_nodes].to(device))
     print_reconstruction(rec)
 
     cls_results = {}
@@ -114,16 +135,20 @@ def run_dataset(
 
         for classifier in ["mlp", "gcn"]:
             clf_cfg = get_classifier_config(dataset, classifier, cfg, args)
+            graph_nodes = classification_graph_nodes(clf_cfg.get("graph_scope", "eval"), classifier, data.num_nodes, target_nodes)
             result = node_classification(
                 z=z.float(),
                 y=data.y,
                 edge_index=edge_index,
-                target_nodes=target_nodes,
+                target_nodes=test_nodes,
+                graph_nodes=graph_nodes,
                 num_classes=graph.num_classes,
                 classifier=classifier,
                 hidden_size=clf_cfg["hidden_size"],
                 dropout=clf_cfg["dropout"],
+                architecture=clf_cfg.get("architecture", "plain"),
                 lr=clf_cfg["lr"],
+                weight_decay=clf_cfg.get("weight_decay", 0.0),
                 epochs=clf_cfg["epochs"],
                 folds=clf_cfg["folds"],
                 seed=seed,
@@ -137,6 +162,9 @@ def run_dataset(
         "node_classification": cls_results,
         "num_nodes": int(data.num_nodes),
         "feature_dim": graph.feature_dim,
+        "observed_nodes": int(train_nodes.numel()),
+        "validation_nodes": int(val_nodes.numel()),
+        "test_nodes": int(test_nodes.numel()),
         "target_nodes": int(target_nodes.numel()),
         "saved_tensors": tensor_paths,
     }
@@ -202,11 +230,24 @@ def get_classifier_config(dataset: str, classifier: str, cfg: dict, args) -> dic
 
     if args.classifier_epochs is not None:
         params["epochs"] = args.classifier_epochs
+    if classifier.lower() == "gcn" and args.gcn_graph_scope is not None:
+        params["graph_scope"] = args.gcn_graph_scope
     return params
 
 
 def dataset_config_keys(dataset: str) -> list[str]:
     return [dataset.lower(), paper_name(dataset).lower()]
+
+
+def classification_graph_nodes(scope: str, classifier: str, num_nodes: int, target_nodes: torch.Tensor) -> torch.Tensor | None:
+    if classifier.lower() != "gcn":
+        return None
+    scope = scope.lower()
+    if scope == "target":
+        return target_nodes
+    if scope == "full":
+        return torch.arange(num_nodes)
+    return None
 
 
 def train_sfar(dataset: str, edge_index: torch.Tensor, afp_features: torch.Tensor, herp_features: torch.Tensor, cfg: dict, seed: int, device: torch.device, args):

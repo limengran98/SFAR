@@ -124,14 +124,38 @@ class MLPClassifier(nn.Module):
 
 
 class GCNClassifier(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int, out_dim: int, dropout: float = 0.2):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        out_dim: int,
+        dropout: float = 0.2,
+        architecture: str = "plain",
+    ):
         super().__init__()
+        self.architecture = architecture.lower()
         self.dropout = dropout
         self.conv1 = GCNConv(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, out_dim)
+        if self.architecture == "residual":
+            self.norm1 = nn.BatchNorm1d(hidden_dim)
+            self.skip1 = nn.Linear(input_dim, hidden_dim)
+            self.skip2 = nn.Linear(hidden_dim, out_dim)
+        else:
+            self.norm1 = None
+            self.skip1 = None
+            self.skip2 = None
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.conv1(x, edge_index).relu()
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        return self.conv2(x, edge_index)
+        h = self.conv1(x, edge_index)
+        if self.skip1 is not None:
+            h = h + self.skip1(x)
+        if self.norm1 is not None:
+            h = self.norm1(h)
+        h = h.relu()
+        h = F.dropout(h, p=self.dropout, training=self.training)
+        out = self.conv2(h, edge_index)
+        if self.skip2 is not None:
+            out = out + self.skip2(h)
+        return out

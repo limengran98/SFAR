@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from sfar.data import load_graph, load_herp_features, paper_name, split_nodes
 from sfar.evaluate import node_classification
-from main import reconstruct_features, train_sfar
+from main import classification_graph_nodes, get_classifier_config, reconstruct_features, train_sfar
 from sfar.utils import load_config, select_device, set_seed
 
 
@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--ckd-epochs", default="50,100,150")
     parser.add_argument("--ckd-lrs", default="0.001")
     parser.add_argument("--ckd-dropouts", default="0.1,0.2,0.3")
+    parser.add_argument("--convs", default="gcn")
     parser.add_argument("--fusions", default="latents_afp,latents")
     parser.add_argument("--classifier-epochs", type=int, default=None)
     parser.add_argument("--output", default=None)
@@ -45,10 +46,11 @@ def main():
 
     datasets = parse_text_list(args.datasets)
     candidates = [
-        {"epochs": epochs, "lr": lr, "dropout": dropout, "fusion": fusion}
+        {"epochs": epochs, "lr": lr, "dropout": dropout, "conv": conv, "fusion": fusion}
         for epochs in parse_int_list(args.ckd_epochs)
         for lr in parse_float_list(args.ckd_lrs)
         for dropout in parse_float_list(args.ckd_dropouts)
+        for conv in parse_text_list(args.convs)
         for fusion in parse_text_list(args.fusions)
     ]
 
@@ -56,7 +58,10 @@ def main():
     for dataset in datasets:
         graph = load_graph(dataset, cfg["data_root"])
         data = graph.data
-        train_nodes, target_nodes = split_nodes(data.y, dataset, cfg.get("cache_dir"), missing_rate, seed)
+        split = split_nodes(data.y, dataset, cfg.get("cache_dir"), missing_rate, seed, cfg.get("validation_rate"))
+        train_nodes = split.train_nodes
+        target_nodes = split.target_nodes
+        val_nodes = split.val_nodes
         afp_features = reconstruct_features(dataset, cfg, data.x.float(), data.edge_index, train_nodes, target_nodes, device)
         herp_cfg = cfg["herp"]
         herp_features = load_herp_features(
@@ -79,19 +84,21 @@ def main():
 
             clf_scores = {}
             for classifier in ["mlp", "gcn"]:
-                clf_cfg = deepcopy(run_cfg["classifier"])
-                if args.classifier_epochs is not None:
-                    clf_cfg["epochs"] = args.classifier_epochs
+                clf_cfg = get_classifier_config(dataset, classifier, run_cfg, run_args)
+                graph_nodes = classification_graph_nodes(clf_cfg.get("graph_scope", "eval"), classifier, data.num_nodes, target_nodes)
                 result = node_classification(
                     z=z.float(),
                     y=data.y,
                     edge_index=data.edge_index,
-                    target_nodes=target_nodes,
+                    target_nodes=val_nodes,
+                    graph_nodes=graph_nodes,
                     num_classes=graph.num_classes,
                     classifier=classifier,
                     hidden_size=clf_cfg["hidden_size"],
                     dropout=clf_cfg["dropout"],
+                    architecture=clf_cfg.get("architecture", "plain"),
                     lr=clf_cfg["lr"],
+                    weight_decay=clf_cfg.get("weight_decay", 0.0),
                     epochs=clf_cfg["epochs"],
                     folds=clf_cfg["folds"],
                     seed=seed,
@@ -104,6 +111,7 @@ def main():
                 "epochs": candidate["epochs"],
                 "lr": candidate["lr"],
                 "dropout": candidate["dropout"],
+                "conv": candidate["conv"],
                 "fusion": candidate["fusion"],
                 "mlp_acc": clf_scores["mlp"],
                 "gcn_acc": clf_scores["gcn"],
@@ -112,6 +120,7 @@ def main():
             rows.append(row)
             print(
                 f"{row['dataset']} epochs={row['epochs']} lr={row['lr']} dropout={row['dropout']} "
+                f"conv={row['conv']} "
                 f"fusion={row['fusion']} MLP={row['mlp_acc'] * 100:.2f} "
                 f"GCN={row['gcn_acc'] * 100:.2f} AVG={row['avg_acc'] * 100:.2f}",
                 flush=True,
@@ -119,7 +128,7 @@ def main():
 
     output = Path(args.output) if args.output else ROOT / "outputs" / "classification_tune.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["dataset", "epochs", "lr", "dropout", "fusion", "mlp_acc", "gcn_acc", "avg_acc"]
+    fieldnames = ["dataset", "epochs", "lr", "dropout", "conv", "fusion", "mlp_acc", "gcn_acc", "avg_acc"]
     with output.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

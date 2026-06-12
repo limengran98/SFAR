@@ -6,6 +6,7 @@
   "datasets": ["cora", "citeseer", "amac", "amap"],
   "seed": 11,
   "missing_rate": 0.6,
+  "validation_rate": 0.1,
   "use_cached_features": false,
   "use_cached_embeddings": false,
   "herp": {
@@ -50,18 +51,51 @@
     "num_layers": 2,
     "dropout": 0.2,
     "conv": "gcn",
-    "fusion": "latents_afp"
+    "fusion": "latents_afp",
+    "datasets": {
+      "cora": {
+        "epochs": 25,
+        "dropout": 0.1,
+        "conv": "gcn",
+        "fusion": "latents_afp"
+      },
+      "citeseer": {
+        "epochs": 25,
+        "dropout": 0.3,
+        "conv": "gcn",
+        "fusion": "latents_afp"
+      }
+    }
   },
   "classifier": {
     "epochs": 1000,
     "lr": 0.01,
     "hidden_size": 256,
     "dropout": 0.2,
+    "weight_decay": 0.0,
     "folds": 5,
     "datasets": {
+      "cora": {
+        "mlp": {
+          "lr": 0.005,
+          "dropout": 0.5
+        },
+        "gcn": {
+          "lr": 0.02,
+          "dropout": 0.5,
+          "weight_decay": 0.0005
+        }
+      },
       "citeseer": {
-        "lr": 0.005,
-        "dropout": 0.3
+        "mlp": {
+          "lr": 0.02,
+          "dropout": 0.5
+        },
+        "gcn": {
+          "lr": 0.01,
+          "dropout": 0.5,
+          "weight_decay": 0.0005
+        }
       }
     }
   }

@@ -52,28 +52,42 @@ def node_classification(
     y: torch.Tensor,
     edge_index: torch.Tensor,
     target_nodes: torch.Tensor,
+    graph_nodes: torch.Tensor | None,
     num_classes: int,
     classifier: str,
     hidden_size: int,
     dropout: float,
+    architecture: str,
     lr: float,
+    weight_decay: float,
     epochs: int,
     folds: int,
     seed: int,
     device: torch.device,
 ) -> Dict[str, object]:
-    features = z[target_nodes].to(device)
-    labels = y[target_nodes].to(device)
-    local_edge_index, _ = subgraph(target_nodes.to(device), edge_index.to(device), relabel_nodes=True)
+    if graph_nodes is None:
+        graph_nodes = target_nodes
+    graph_nodes_cpu = graph_nodes.cpu()
+    target_nodes_cpu = target_nodes.cpu()
+    features = z[graph_nodes_cpu].to(device)
+    labels = y[graph_nodes_cpu].to(device)
+    graph_nodes = graph_nodes_cpu.to(device)
+    target_nodes = target_nodes_cpu.to(device)
+    local_edge_index, _ = subgraph(graph_nodes, edge_index.to(device), relabel_nodes=True)
+    node_to_local = torch.full((z.size(0),), -1, dtype=torch.long, device=device)
+    node_to_local[graph_nodes] = torch.arange(graph_nodes.numel(), device=device)
+    target_idx = node_to_local[target_nodes]
+    if (target_idx < 0).any():
+        raise ValueError("All target_nodes must be included in graph_nodes for node classification.")
     splitter = KFold(n_splits=folds, shuffle=True, random_state=seed)
     metrics: List[Dict[str, float]] = []
 
-    for fold_id, (train_idx, test_idx) in enumerate(splitter.split(np.arange(features.size(0)))):
+    for fold_id, (train_idx, test_idx) in enumerate(splitter.split(np.arange(target_idx.numel()))):
         set_seed(make_seed(seed, classifier, fold_id))
-        train_idx = torch.from_numpy(train_idx).long().to(device)
-        test_idx = torch.from_numpy(test_idx).long().to(device)
-        model = make_classifier(classifier, features.size(1), hidden_size, num_classes, dropout).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        train_idx = target_idx[torch.from_numpy(train_idx).long().to(device)]
+        test_idx = target_idx[torch.from_numpy(test_idx).long().to(device)]
+        model = make_classifier(classifier, features.size(1), hidden_size, num_classes, dropout, architecture).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         best = {"acc": 0.0}
 
         for _ in range(epochs + 1):
@@ -98,9 +112,9 @@ def node_classification(
     }
 
 
-def make_classifier(name: str, input_dim: int, hidden_dim: int, num_classes: int, dropout: float):
+def make_classifier(name: str, input_dim: int, hidden_dim: int, num_classes: int, dropout: float, architecture: str):
     if name.lower() == "gcn":
-        return GCNClassifier(input_dim, hidden_dim, num_classes, dropout=max(dropout, 0.2))
+        return GCNClassifier(input_dim, hidden_dim, num_classes, dropout=dropout, architecture=architecture)
     return MLPClassifier(input_dim, hidden_dim, num_classes, dropout=dropout)
 
 

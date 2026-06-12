@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict
 
 import numpy as np
 import torch
@@ -43,6 +43,17 @@ class GraphData:
     data: object
     feature_dim: int
     num_classes: int
+
+
+@dataclass(frozen=True)
+class NodeSplit:
+    train_nodes: torch.Tensor
+    val_nodes: torch.Tensor
+    test_nodes: torch.Tensor
+
+    @property
+    def target_nodes(self) -> torch.Tensor:
+        return torch.cat([self.val_nodes, self.test_nodes], dim=0)
 
 
 def canonical_dataset(name: str) -> str:
@@ -89,15 +100,33 @@ def split_nodes(
     cache_dir: str | os.PathLike[str] | None,
     missing_rate: float,
     seed: int,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    validation_rate: float | None = None,
+) -> NodeSplit:
     indices = np.arange(y.numel())
-    train_nodes, test_nodes = train_test_split(
+    labels = y.cpu().numpy()
+    train_nodes, target_nodes = train_test_split(
         indices,
         test_size=missing_rate,
         random_state=seed,
-        stratify=y.cpu().numpy(),
+        stratify=labels,
     )
-    return torch.from_numpy(train_nodes).long(), torch.from_numpy(test_nodes).long()
+    if validation_rate is None:
+        validation_rate = missing_rate / 6.0
+    if not 0.0 < validation_rate < missing_rate:
+        raise ValueError("validation_rate must be greater than 0 and smaller than missing_rate.")
+
+    val_fraction = validation_rate / missing_rate
+    val_nodes, test_nodes = train_test_split(
+        target_nodes,
+        train_size=val_fraction,
+        random_state=seed,
+        stratify=labels[target_nodes],
+    )
+    return NodeSplit(
+        train_nodes=torch.from_numpy(train_nodes).long(),
+        val_nodes=torch.from_numpy(val_nodes).long(),
+        test_nodes=torch.from_numpy(test_nodes).long(),
+    )
 
 
 def load_cached_tensor(cache_dir: str | os.PathLike[str] | None, name: str, suffix: str):

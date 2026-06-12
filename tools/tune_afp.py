@@ -38,17 +38,21 @@ def main():
     betas = parse_float_list(args.betas)
     graph = load_graph(args.dataset, cfg["data_root"])
     data = graph.data
-    train_nodes, target_nodes = split_nodes(
+    split = split_nodes(
         data.y,
         args.dataset,
         cfg.get("cache_dir"),
         cfg["missing_rate"],
         cfg["seed"],
+        cfg.get("validation_rate"),
     )
+    train_nodes = split.train_nodes
+    target_nodes = split.target_nodes
+    val_nodes = split.val_nodes
 
     raw_features = data.x.float()
     masked = raw_features.clone()
-    masked[target_nodes] = 0
+    masked.index_fill_(0, target_nodes, 0.0)
     afp = AdaptiveFeaturePropagation(data.edge_index, masked, train_nodes)
 
     rows = []
@@ -58,7 +62,7 @@ def main():
             for iteration in range(1, args.max_iter + 1):
                 out = alpha * torch.sparse.mm(afp.adj, out) + (1.0 - alpha) * out.mean(dim=0)
                 out[afp.known_nodes] = beta * out[afp.known_nodes] + (1.0 - beta) * afp.known_init
-                scores = reconstruction_scores(out[target_nodes].cpu(), raw_features[target_nodes])
+                scores = reconstruction_scores(out[val_nodes].cpu(), raw_features[val_nodes])
                 avg = sum(scores.values()) / len(scores)
                 row = {
                     "dataset": args.dataset,
